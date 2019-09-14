@@ -1,0 +1,3 @@
+rqalpha>=2.0.0
+tushare>=0.7.4
+greenlet>=0.4.14
