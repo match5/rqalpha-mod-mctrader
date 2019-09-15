@@ -5,6 +5,8 @@ from rqalpha.model.trade import Trade
 from rqalpha.model.portfolio import Portfolio
 from rqalpha.const import DEFAULT_ACCOUNT_TYPE
 
+from rqalpha.mod.rqalpha_mod_sys_simulation.simulation_broker import init_portfolio
+
 class AgentBroker(AbstractBroker):
     def __init__(self, env, mod_config):
         self._env = env
@@ -29,8 +31,7 @@ class AgentBroker(AbstractBroker):
         pass
 
     def get_portfolio(self):
-        start_date = self._env.config.base.start_date
-        return Portfolio(start_date, 0, 0, {DEFAULT_ACCOUNT_TYPE.STOCK: 0})
+        return init_portfolio(self._env)
 
     def get_benchmark_portfolio(self):
         return None
