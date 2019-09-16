@@ -1,6 +1,6 @@
 
-from gevent import monkey
-monkey.patch_all
+# from gevent import monkey
+# monkey.patch_all
 
 from rqalpha.interface import AbstractMod
 from rqalpha.data.data_proxy import DataProxy

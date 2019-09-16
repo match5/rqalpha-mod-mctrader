@@ -1,5 +1,6 @@
 
 import gevent
+import time
 
 from datetime import datetime, date
 
@@ -31,6 +32,7 @@ class McTraderEventSource(AbstractEventSource):
             return time.minute > 0
         if 13 < time.hour < 15:
             return True
+        return False
 
     def events(self, start_date, end_date, frequency):
         while True:
@@ -39,8 +41,8 @@ class McTraderEventSource(AbstractEventSource):
                 if now.date() > self.before_trading_fire_date and 8 <= now.hour < 15:
                     self.before_trading_fire_date = now.date()
                     yield Event(EVENT.BEFORE_TRADING, calendar_dt=now, trading_dt=now)
-                    now = datetime.now()
                 if self.is_trading_time(now):
+                    self._env.data_source.update_realtime_quotes(self._env.get_universe())
                     yield Event(EVENT.BAR, calendar_dt=now, trading_dt=now)
                 elif self.after_trading_fire_date < now.date() == self.before_trading_fire_date and now.hour >= 15:
                     self.after_trading_fire_date = now.date()
@@ -48,6 +50,5 @@ class McTraderEventSource(AbstractEventSource):
                 elif self.settlement_fire_date < now.date() == self.before_trading_fire_date and now.hour >= 16:
                     self.settlement_fire_date = now.date()
                     yield Event(EVENT.SETTLEMENT, calendar_dt=now, trading_dt=now)
-            sec = datetime.now().second
-            gevent.sleep(60 - sec if 5 < sec else 60)
+            time.sleep(60)
             
