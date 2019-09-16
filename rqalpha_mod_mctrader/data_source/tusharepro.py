@@ -69,6 +69,9 @@ def order_book_id(ts_code):
 def order_book_id_pro(tscode):
     return ts_code_pro(ts_code)
 
+def convert_date_str_to_int(datestr):
+    return convert_dt_to_int(pd.Timestamp(datestr))
+
 class TushareProDataSource(BaseDataSource):
     def __init__(self, env, apis):
         super(TushareProDataSource, self).__init__(
@@ -88,9 +91,9 @@ class TushareProDataSource(BaseDataSource):
         codes = [ts_code(book_id) for book_id in order_book_ids]
         try:
             df = ts.get_realtime_quotes(codes)
-        except TimeoutError as e:
+        except Exception as e:
             print(e)
-            return
+            return None
 
         columns = set(df.columns) - set(['name', 'time', 'date', 'code'])
         for label in columns:
@@ -138,16 +141,27 @@ class TushareProDataSource(BaseDataSource):
                      adjust_type='pre', adjust_orig=None):
         start_dt_loc = self.get_trading_calendar().get_loc(dt.replace(hour=0, minute=0, second=0, microsecond=0)) - bar_count + 1
         start_dt = self.get_trading_calendar()[start_dt_loc]
-        bar_data = ts.pro_bar(
-            api=self.get_api(),
-            ts_code=ts_code_pro(instrument.order_book_id),
-            start_date=start_dt.strftime('%Y%m%d'),
-            end_date=dt.strftime('%Y%m%d'),
-            asset='I' if instrument.type == 'INDX' else 'E',
-            adj=adjust_map.get(adjust_type, None),
-            freq=freq_map.get(frequency, None)
-        )
+        try:
+            bar_data = ts.pro_bar(
+                api=self.get_api(),
+                ts_code=ts_code_pro(instrument.order_book_id),
+                start_date=start_dt.strftime('%Y%m%d'),
+                end_date=dt.strftime('%Y%m%d'),
+                asset='I' if instrument.type == 'INDX' else 'E',
+                adj=adjust_map.get(adjust_type, None),
+                freq=freq_map.get(frequency, None)
+            )
+        except Exception as e:
+            print(e)
+            return None
         if not bar_data.empty:
+            bar_data = bar_data.rename(columns={
+                'vol': 'volume',
+                'amount': 'total_turnover',
+            })
+            bar_data['volume'] = bar_data['volume'] * 100
+            bar_data['total_turnover'] = bar_data['total_turnover'] * 1000
+            bar_data['datetime'] = bar_data['trade_date'].apply(convert_date_str_to_int)
             if isinstance(fields, six.string_types):
                 fields = [fields]
             fields = [field for field in fields if field in bar_data.columns]
