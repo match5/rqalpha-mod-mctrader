@@ -1,7 +1,8 @@
 import six
 from datetime import date
-from rqalpha.data.base_data_source import BaseDataSource
+from dateutil.relativedelta import relativedelta
 
+from rqalpha.data.base_data_source import BaseDataSource
 from rqalpha.utils.datetime_func import convert_dt_to_int
 from rqalpha.model.bar import NAMES as bar_fields
 
@@ -134,11 +135,19 @@ class TushareProDataSource(BaseDataSource):
             quote = quote[bar_fields].to_dict()
             quote['datetime'] = convert_dt_to_int(dt)
             return quote
-        except KeyError:
-            return None
+        except Exception as e:
+            print(e)
+        return None
 
     def history_bars(self, instrument, bar_count, frequency, fields, dt, skip_suspended=True, include_now=False,
                      adjust_type='pre', adjust_orig=None):
+        if frequency == '1d':
+            base = super(TushareProDataSource, self)
+            if dt.date() <= base.available_data_range(frequency)[1]:
+                return base.history_bars(
+                    instrument, bar_count, frequency, fields, dt,
+                    skip_suspended, include_now, adjust_type, adjust_orig
+                )
         start_dt_loc = self.get_trading_calendar().get_loc(dt.replace(hour=0, minute=0, second=0, microsecond=0)) - bar_count + 1
         start_dt = self.get_trading_calendar()[start_dt_loc]
         try:
@@ -174,9 +183,9 @@ class TushareProDataSource(BaseDataSource):
 
     def get_trading_calendar(self):
         if self.calendar is None:
-            start_date = str(self._env.config.base.start_date).replace('-', '')
-            end_date = str(self._env.config.base.end_date).replace('-', '')
-            df = self.get_api().trade_cal(start_date=start_date, end_date=end_date)
+            start_date = date.today() - relativedelta(years=1)
+            start_date = start_date.strftime("%Y-%m-%d")
+            df = self.get_api().trade_cal(start_date=start_date)
             df = df[df['is_open'] == 1]
             self.calendar = pd.Index(pd.Timestamp(str(d)) for d in df['cal_date'])
         return self.calendar

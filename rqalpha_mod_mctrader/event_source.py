@@ -16,7 +16,6 @@ class McTraderEventSource(AbstractEventSource):
         self._mod_config = mod_config
         self.before_trading_fire_date = date(2000, 1, 1)
         self.after_trading_fire_date = date(2000, 1, 1)
-        self.settlement_fire_date = date(2000, 1, 1)
 
     def is_trading_day(self, time):
         return self._env.data_proxy.is_trading_date(time.date())
@@ -47,8 +46,8 @@ class McTraderEventSource(AbstractEventSource):
                 elif self.after_trading_fire_date < now.date() == self.before_trading_fire_date and now.hour >= 15:
                     self.after_trading_fire_date = now.date()
                     yield Event(EVENT.AFTER_TRADING, calendar_dt=now, trading_dt=now)
-                elif self.settlement_fire_date < now.date() == self.before_trading_fire_date and now.hour >= 16:
-                    self.settlement_fire_date = now.date()
-                    yield Event(EVENT.SETTLEMENT, calendar_dt=now, trading_dt=now)
-            time.sleep(60)
+                    if now.date() >= end_date:
+                        return
+            sec = datetime.now().second
+            gevent.sleep(60 - sec if 5 < sec else 60)
             
