@@ -24,14 +24,16 @@ class McTraderMod(AbstractMod):
         pass
 
     def start_up(self, env, mod_config):
-        print(mod_config)
+
         if mod_config.data_source == 'tushare_pro':
             apis = [ts.pro_api(token) for token in mod_config.tushare_tokens]
             env.set_data_source(TushareProDataSource(env, apis))
+
         env.set_price_board(McTraderPriceBoard())
         env.set_data_proxy(DataProxy(env.data_source, env.price_board))
         env.set_event_source(McTraderEventSource(env, mod_config))
         env.set_broker(AgentBroker(env, mod_config))
+
         if mod_config.log_file:
             user_log.handlers = []
             user_system_log.handlers = []
@@ -44,5 +46,7 @@ class McTraderMod(AbstractMod):
             system_log.handlers = [FileHandler(mod_config.log_file, mode='a', bubble=True)]
             basic_system_log.handlers = [FileHandler(mod_config.log_file, bubble=True)]
 
+        system_log.info('start_up with\n{}'.format(mod_config))
+
     def tear_down(self, code, exception=None):
-        pass
+        system_log.info('tear_down')

@@ -5,6 +5,7 @@ from dateutil.relativedelta import relativedelta
 from rqalpha.data.base_data_source import BaseDataSource
 from rqalpha.utils.datetime_func import convert_dt_to_int
 from rqalpha.model.bar import NAMES as bar_fields
+from rqalpha.utils.logger import user_system_log
 
 import pandas as pd
 import tushare as ts
@@ -93,7 +94,7 @@ class TushareProDataSource(BaseDataSource):
         try:
             df = ts.get_realtime_quotes(codes)
         except Exception as e:
-            print(e)
+            user_system_log.warn(e)
             return None
 
         columns = set(df.columns) - set(['name', 'time', 'date', 'code'])
@@ -136,7 +137,7 @@ class TushareProDataSource(BaseDataSource):
             quote['datetime'] = convert_dt_to_int(dt)
             return quote
         except Exception as e:
-            print(e)
+            user_system_log.warn(e)
         return None
 
     def history_bars(self, instrument, bar_count, frequency, fields, dt, skip_suspended=True, include_now=False,
@@ -161,7 +162,7 @@ class TushareProDataSource(BaseDataSource):
                 freq=freq_map.get(frequency, None)
             )
         except Exception as e:
-            print(e)
+            user_system_log.warn(e)
             return None
         if not bar_data.empty:
             bar_data = bar_data.rename(columns={

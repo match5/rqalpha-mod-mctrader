@@ -1,5 +1,3 @@
-
-import gevent
 import time
 
 from datetime import datetime, date
@@ -49,5 +47,5 @@ class McTraderEventSource(AbstractEventSource):
                     if now.date() >= end_date:
                         return
             sec = datetime.now().second
-            gevent.sleep(60 - sec if 5 < sec else 60)
+            time.sleep(60 - sec if 5 < sec else 60)
             

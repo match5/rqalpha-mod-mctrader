@@ -5,6 +5,8 @@ from rqalpha.model.trade import Trade
 from rqalpha.model.portfolio import Portfolio
 from rqalpha.const import DEFAULT_ACCOUNT_TYPE
 
+from rqalpha.utils.logger import user_system_log
+
 from rqalpha.mod.rqalpha_mod_sys_simulation.simulation_broker import init_portfolio
 
 class AgentBroker(AbstractBroker):
@@ -22,10 +24,10 @@ class AgentBroker(AbstractBroker):
         return []
 
     def submit_order(self, order):
-        print('submit_order', order)
+        user_system_log.info('submit_order {side} {code}'.format(side=order.side, code=order.order_book_id))
 
     def cancel_order(self, order):
-        print('cancel_order', order)
+        user_system_log.info('cancel_order {side} {code}'.format(side=order.side, code=order.order_book_id))
 
     def update(self, calendar_dt, trading_dt, bar_dict):
         pass
