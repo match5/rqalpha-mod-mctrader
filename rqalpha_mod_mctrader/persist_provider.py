@@ -13,6 +13,8 @@ class McPersistProvider(AbstractPersistProvider):
         self._should_run_init = mod_config.should_run_init
         self._should_resume = mod_config.should_resume
         self._persist_dir = mod_config.persist_dir
+        if not os.path.exists(self._persist_dir):
+            os.makedirs(self._persist_dir)
 
     def store(self, key, value):
         user_system_log.info('store {key} {value}'.format(key=key, value=value))

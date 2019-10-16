@@ -8,7 +8,7 @@ from rqalpha.utils.logger import (
 
 from .data_source.tusharepro import TushareProDataSource
 from .event_source import McTraderEventSource
-from .broker.agent_broker import AgentBroker
+from .broker.ths_broker import ThsBroker
 from .price_board import McTraderPriceBoard
 from .persist_provider import McPersistProvider
 
@@ -26,10 +26,12 @@ class McTraderMod(AbstractMod):
             apis = [ts.pro_api(token) for token in mod_config.tushare_tokens]
             env.set_data_source(TushareProDataSource(env, apis))
 
+        if mod_config.broker == 'thsauto':
+            env.set_broker(ThsBroker(env, mod_config))
+
         env.set_price_board(McTraderPriceBoard())
         env.set_data_proxy(DataProxy(env.data_source, env.price_board))
         env.set_event_source(McTraderEventSource(env, mod_config))
-        env.set_broker(AgentBroker(env, mod_config))
         env.set_persist_provider(McPersistProvider(env, mod_config))
 
         if mod_config.log_file:
