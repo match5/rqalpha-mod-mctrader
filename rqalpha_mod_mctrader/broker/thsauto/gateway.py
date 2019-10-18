@@ -2,7 +2,7 @@ import json
 import time
 from urllib import request
 
-from rqalpha.const import SIDE
+from rqalpha.const import SIDE, ORDER_TYPE
 from rqalpha.utils.logger import user_system_log
 from rqalpha.events import EVENT
 from rqalpha.model.trade import Trade
@@ -30,10 +30,15 @@ class ThsautoGatway:
 
     def submit_order(self, order):
         route = '/sell' if order.side == SIDE.SELL else '/buy'
+        price = order.price
+        if order.type == ORDER_TYPE.MARKET:
+            if order.side == SIDE.SELL:
+                price = self._env.price_board.get_limit_down(order.order_book_id)
+            else:
+                price = self._env.price_board.get_limit_up(order.order_book_id)
         parmas = 'stock_no=%s&amount=%d&price=%f' % (
             stock_no(order.order_book_id),
-            order.quantity,
-            order.price,
+            order.quantity, price,
         )
         url = '%s%s?%s' % (self._address, route, parmas)
         user_system_log.info('loading: %s' % url)

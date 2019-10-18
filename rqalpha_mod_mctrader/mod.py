@@ -29,7 +29,7 @@ class McTraderMod(AbstractMod):
         if mod_config.broker == 'thsauto':
             env.set_broker(ThsBroker(env, mod_config))
 
-        env.set_price_board(McTraderPriceBoard())
+        env.set_price_board(McTraderPriceBoard(env))
         env.set_data_proxy(DataProxy(env.data_source, env.price_board))
         env.set_event_source(McTraderEventSource(env, mod_config))
         env.set_persist_provider(McPersistProvider(env, mod_config))

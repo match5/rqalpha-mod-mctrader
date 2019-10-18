@@ -82,7 +82,6 @@ class TushareProDataSource(BaseDataSource):
         self.apis = apis
         self._env = env
         self.calendar = None
-        self.realtime_quotes = None
 
     def get_api(self):
         api = self.apis.pop(0)
@@ -128,11 +127,11 @@ class TushareProDataSource(BaseDataSource):
         del df['date']
         del df['time']
 
-        self.realtime_quotes = df
+        self._env.price_board.set_snapshot(df)
 
     def get_bar(self, instrument, dt, frequency):
         try:
-            quote = self.realtime_quotes.loc[instrument.order_book_id]
+            quote = self._env.price_board.snapshot.loc[instrument.order_book_id]
             quote = quote[bar_fields].to_dict()
             quote['datetime'] = convert_dt_to_int(dt)
             return quote

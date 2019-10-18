@@ -31,7 +31,9 @@ class ThsBroker(AbstractBroker):
             return self._gateway._open_orders.values()
 
     def submit_order(self, order):
+        user_system_log.info('submit_order {}'.format(order))
         self._gateway.submit_order(order)
 
     def cancel_order(self, order):
+        user_system_log.info('cancel_order {}'.format(order))
         self._gateway.cancel_order(order)
