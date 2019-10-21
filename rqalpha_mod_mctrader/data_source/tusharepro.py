@@ -89,6 +89,8 @@ class TushareProDataSource(BaseDataSource):
         return api
 
     def update_realtime_quotes(self, order_book_ids):
+        if not order_book_ids:
+            return
         codes = [ts_code(book_id) for book_id in order_book_ids]
         try:
             df = ts.get_realtime_quotes(codes)

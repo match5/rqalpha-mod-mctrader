@@ -4,7 +4,7 @@ from urllib import request
 
 from rqalpha.const import SIDE, ORDER_TYPE
 from rqalpha.utils.logger import user_system_log
-from rqalpha.events import EVENT
+from rqalpha.events import Event, EVENT
 from rqalpha.model.trade import Trade
 from rqalpha.utils import account_type_str2enum
 
@@ -26,6 +26,7 @@ class ThsautoGatway:
         self._address = 'http://%s/thsauto' % address
         self._open_orders = {}
         self._order_id_map = {}
+        self._trade_no = set()
         self._env.event_bus.add_listener(EVENT.POST_BAR, self._on_post_bar)
 
     def submit_order(self, order):
@@ -42,11 +43,11 @@ class ThsautoGatway:
         )
         url = '%s%s?%s' % (self._address, route, parmas)
         user_system_log.info('loading: %s' % url)
-        with request.urlopen(url) as f:
-            user_system_log.info('status: %d %s' % (f.status, f.reason))
-            if f.status == 200:
-                data = f.read().decode('utf-8')
-                try:
+        try:
+            with request.urlopen(url) as f:
+                user_system_log.info('status: %d %s' % (f.status, f.reason))
+                if f.status == 200:
+                    data = f.read().decode('utf-8')
                     resp = json.loads(data)
                     if resp.get('success', False):
                         account = self._env.get_account(order.order_book_id)
@@ -60,21 +61,21 @@ class ThsautoGatway:
                         self._order_id_map[str_order_id] = entrust_no
                         return
                     else:
-                        order.mark_rejected(data)
+                        order.mark_rejected(resp.get('msg', 'request failed'))
                         return
-                except Exception as e:
-                    user_system_log.info(repr(e))
-        order.mark_rejected('request faild')
+        except Exception as e:
+            user_system_log.warn(repr(e))
+        order.mark_rejected('request failed')
 
     def cancel_order(self, order):
         if self._open_orders.get(order.order_id, None):
             url = '%s%s?%s' % (self._address, '/cancel', self._order_id_map[order.order_id])
             user_system_log.info('loading: %s' % url)
-            with request.urlopen(url) as f:
-                user_system_log.info('status: %d %s' % (f.status, f.reason))
-                if f.status == 200:
-                    data = f.read().decode('utf-8')
-                    try:
+            try:
+                with request.urlopen(url) as f:
+                    user_system_log.info('status: %d %s' % (f.status, f.reason))
+                    if f.status == 200:
+                        data = f.read().decode('utf-8')
                         resp = json.loads(data)
                         if resp.get('success', False):
                             account = self._env.get_account(order.order_book_id)
@@ -86,23 +87,26 @@ class ThsautoGatway:
                             del self._open_orders[str_order_id]
                             del self._order_id_map[entrust_no]
                             del self._order_id_map[str_order_id]
-                    except Exception as e:
-                        user_system_log.info(repr(e))
-                        return
+                        else:
+                            user_system_log.warn(resp.get('msg', 'request failed'))
+                            return
+            except Exception as e:
+                user_system_log.warn(repr(e))
+                return
         else:
             user_system_log.info('cancel order not fund: %s' % order.order_id)
 
     def _query_filled_orders(self):
         url = '%s%s' % (self._address, '/orders/filled')
         user_system_log.info('loading: %s' % url)
-        with request.urlopen(url) as f:
-            user_system_log.info('status: %d %s' % (f.status, f.reason))
-            if f.status == 200:
-                data = f.read().decode('utf-8')
-                try:
+        try:
+            with request.urlopen(url) as f:
+                user_system_log.info('status: %d %s' % (f.status, f.reason))
+                if f.status == 200:
+                    data = f.read().decode('utf-8')
                     return json.loads(data)
-                except Exception as e:
-                    user_system_log.info(repr(e))
+        except Exception as e:
+            user_system_log.warn(repr(e))
         return None
 
     def _on_post_bar(self, event):
@@ -110,6 +114,9 @@ class ThsautoGatway:
             data = self._query_filled_orders()
             if data is not None:
                 for item in data:
+                    trade_no = item[u'成交编号']
+                    if trade_no in self._trade_no:
+                        continue
                     entrust_no = item[u'合同编号']
                     order_id = self._order_id_map.get(entrust_no, None)
                     if order_id:
@@ -128,10 +135,12 @@ class ThsautoGatway:
                             trade._commission = self._env.get_trade_commission(account_type_str2enum(account.type), trade)
                             trade._tax = self._env.get_trade_tax(account_type_str2enum(account.type), trade)
                             order.fill(trade)
-                            self._env.event_bus.publish_event(RqEvent(EVENT.TRADE, account=account, trade=trade))
-                            str_order_id = str(order.order_id)
-                            del self._open_orders[str_order_id]
-                            del self._order_id_map[entrust_no]
-                            del self._order_id_map[str_order_id]
+                            self._env.event_bus.publish_event(Event(EVENT.TRADE, account=account, trade=trade, order=order))
+                            self._trade_no.add(trade_no)
+                            if order.is_final():
+                                str_order_id = str(order.order_id)
+                                del self._open_orders[str_order_id]
+                                del self._order_id_map[entrust_no]
+                                del self._order_id_map[str_order_id]
 
 
