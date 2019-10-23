@@ -38,7 +38,6 @@ class McTraderMod(AbstractMod):
             user_log.handlers = []
             user_system_log.handlers = []
             user_handler = FileHandler(mod_config.log_file, bubble=True)
-            user_handler.formatter = user_std_handler_log_formatter
             if not env.config.extra.user_log_disabled:
                 user_log.handlers.append(user_handler)
             if not env.config.extra.user_system_log_disabled:
@@ -46,7 +45,7 @@ class McTraderMod(AbstractMod):
             system_log.handlers = [FileHandler(mod_config.log_file, mode='a', bubble=True)]
             basic_system_log.handlers = [FileHandler(mod_config.log_file, bubble=True)]
 
-        system_log.info(mod_config)
+        system_log.info('\n{}'.format(mod_config))
 
     def tear_down(self, code, exception=None):
         system_log.info('tear_down %s' % code)

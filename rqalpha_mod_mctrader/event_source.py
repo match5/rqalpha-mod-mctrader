@@ -38,9 +38,11 @@ class McTraderEventSource(AbstractEventSource):
                 if now.date() > self.before_trading_fire_date and 8 <= now.hour < 15:
                     self.before_trading_fire_date = now.date()
                     self._env.data_source.update_realtime_quotes(self._env.get_universe())
+                    now = datetime.now()
                     yield Event(EVENT.BEFORE_TRADING, calendar_dt=now, trading_dt=now)
                 if self.is_trading_time(now):
                     self._env.data_source.update_realtime_quotes(self._env.get_universe())
+                    now = datetime.now()
                     yield Event(EVENT.BAR, calendar_dt=now, trading_dt=now)
                 elif self.after_trading_fire_date < now.date() == self.before_trading_fire_date and now.hour >= 15:
                     self.after_trading_fire_date = now.date()

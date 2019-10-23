@@ -144,8 +144,9 @@ class TushareProDataSource(BaseDataSource):
     def history_bars(self, instrument, bar_count, frequency, fields, dt, skip_suspended=True, include_now=False,
                      adjust_type='pre', adjust_orig=None):
         if frequency == '1d':
+            prev_date = self._env.data_proxy.get_previous_trading_date(dt)
             base = super(TushareProDataSource, self)
-            if dt.date() <= base.available_data_range(frequency)[1]:
+            if prev_date.date() <= base.available_data_range(frequency)[1]:
                 return base.history_bars(
                     instrument, bar_count, frequency, fields, dt,
                     skip_suspended, include_now, adjust_type, adjust_orig
