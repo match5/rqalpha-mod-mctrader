@@ -46,7 +46,7 @@ class McTraderMod(AbstractMod):
             system_log.handlers = [FileHandler(mod_config.log_file, mode='a', bubble=True)]
             basic_system_log.handlers = [FileHandler(mod_config.log_file, bubble=True)]
 
-        system_log.info('start_up with\n{}'.format(mod_config))
+        system_log.info(mod_config)
 
     def tear_down(self, code, exception=None):
-        system_log.info('tear_down')
+        system_log.info('tear_down %s' % code)

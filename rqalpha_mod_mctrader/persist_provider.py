@@ -2,7 +2,6 @@ import datetime
 import os
 
 from rqalpha.interface import AbstractPersistProvider
-from rqalpha.utils.logger import user_system_log
 
 
 class McPersistProvider(AbstractPersistProvider):
@@ -17,14 +16,12 @@ class McPersistProvider(AbstractPersistProvider):
             os.makedirs(self._persist_dir)
 
     def store(self, key, value):
-        user_system_log.info('store {key} {value}'.format(key=key, value=value))
         path = os.path.join(self._persist_dir, '%s.dat' % key)
         file = open(path, 'wb')
         file.write(value)
         file.close()
 
     def load(self, key):
-        user_system_log.info('load {key}'.format(key=key))
         path = os.path.join(self._persist_dir, '%s.dat' % key)
         try:
             file = open(path, 'rb')
