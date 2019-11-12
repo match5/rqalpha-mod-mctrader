@@ -95,7 +95,7 @@ class TushareProDataSource(BaseDataSource):
         try:
             df = ts.get_realtime_quotes(codes)
         except Exception as e:
-            user_system_log.warn(e)
+            user_system_log.warn(repr(e))
             return None
 
         columns = set(df.columns) - set(['name', 'time', 'date', 'code'])
@@ -138,7 +138,7 @@ class TushareProDataSource(BaseDataSource):
             quote['datetime'] = convert_dt_to_int(dt)
             return quote
         except Exception as e:
-            user_system_log.warn(e)
+            user_system_log.warn(repr(e))
         return None
 
     def history_bars(self, instrument, bar_count, frequency, fields, dt, skip_suspended=True, include_now=False,
@@ -164,7 +164,7 @@ class TushareProDataSource(BaseDataSource):
                 freq=freq_map.get(frequency, None)
             )
         except Exception as e:
-            user_system_log.warn(e)
+            user_system_log.warn(repr(e))
             return None
         if not bar_data.empty:
             bar_data = bar_data.rename(columns={
@@ -185,10 +185,11 @@ class TushareProDataSource(BaseDataSource):
         return date.today(), date.max
 
     def get_trading_calendar(self):
-        if self.calendar is None:
-            start_date = date.today() - relativedelta(years=1)
-            start_date = start_date.strftime("%Y-%m-%d")
-            df = self.get_api().trade_cal(start_date=start_date)
-            df = df[df['is_open'] == 1]
-            self.calendar = pd.Index(pd.Timestamp(str(d)) for d in df['cal_date'])
-        return self.calendar
+        return super(TushareProDataSource, self).get_trading_calendar()
+        # if self.calendar is None:
+        #     start_date = date.today() - relativedelta(years=1)
+        #     start_date = start_date.strftime("%Y-%m-%d")
+        #     df = self.get_api().trade_cal(start_date=start_date)
+        #     df = df[df['is_open'] == 1]
+        #     self.calendar = pd.Index(pd.Timestamp(str(d)) for d in df['cal_date'])
+        # return self.calendar

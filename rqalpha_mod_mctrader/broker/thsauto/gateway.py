@@ -28,6 +28,7 @@ class ThsautoGatway:
         self._order_id_map = {}
         self._trade_no = set()
         self._env.event_bus.add_listener(EVENT.POST_BAR, self._on_post_bar)
+        self._env.event_bus.add_listener(EVENT.PRE_AFTER_TRADING, self._on_pre_after_trading)
 
     def submit_order(self, order):
         route = '/sell' if order.side == SIDE.SELL else '/buy'
@@ -43,6 +44,7 @@ class ThsautoGatway:
         )
         url = '%s%s?%s' % (self._address, route, parmas)
         user_system_log.info('loading: %s' % url)
+        reason = 'request failed'
         try:
             with request.urlopen(url) as f:
                 user_system_log.info('status: %d %s' % (f.status, f.reason))
@@ -61,11 +63,11 @@ class ThsautoGatway:
                         self._order_id_map[str_order_id] = entrust_no
                         return
                     else:
-                        order.mark_rejected(resp.get('msg', 'request failed'))
-                        return
+                        reason = resp.get('msg', reason)
         except Exception as e:
             user_system_log.warn(repr(e))
-        order.mark_rejected('request failed')
+        order.mark_rejected(reason)
+        self._env.event_bus.publish_event(Event(EVENT.ORDER_UNSOLICITED_UPDATE, account=account, order=order))
 
     def cancel_order(self, order):
         if self._open_orders.get(order.order_id, None):
@@ -87,9 +89,9 @@ class ThsautoGatway:
                             del self._open_orders[str_order_id]
                             del self._order_id_map[entrust_no]
                             del self._order_id_map[str_order_id]
+                            return
                         else:
                             user_system_log.warn(resp.get('msg', 'request failed'))
-                            return
             except Exception as e:
                 user_system_log.warn(repr(e))
                 return
@@ -142,5 +144,11 @@ class ThsautoGatway:
                                 del self._open_orders[str_order_id]
                                 del self._order_id_map[entrust_no]
                                 del self._order_id_map[str_order_id]
+
+    def _on_pre_after_trading(self, event):
+        for order in self._open_orders.values():
+            order.mark_cancelled('order {} volume {} is unmatched'.format(order.order_book_id, order.quantity))
+            self._env.event_bus.publish_event(Event(EVENT.ORDER_UNSOLICITED_UPDATE, account=account, order=order))
+
 
 
