@@ -46,14 +46,14 @@ class ThsautoGatway:
         user_system_log.info('loading: %s' % url)
         reason = 'request failed'
         try:
+            account = self._env.get_account(order.order_book_id)
+            self._env.event_bus.publish_event(Event(EVENT.ORDER_PENDING_NEW, account=account, order=order))
             with request.urlopen(url) as f:
                 user_system_log.info('status: %d %s' % (f.status, f.reason))
                 if f.status == 200:
                     data = f.read().decode('utf-8')
                     resp = json.loads(data)
                     if resp.get('success', False):
-                        account = self._env.get_account(order.order_book_id)
-                        self._env.event_bus.publish_event(Event(EVENT.ORDER_PENDING_NEW, account=account, order=order))
                         order.active()
                         self._env.event_bus.publish_event(Event(EVENT.ORDER_CREATION_PASS, account=account, order=order))
                         str_order_id = str(order.order_id)
