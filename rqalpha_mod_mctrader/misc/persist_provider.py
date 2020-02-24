@@ -5,6 +5,7 @@ from rqalpha.interface import AbstractPersistProvider
 
 
 class McPersistProvider(AbstractPersistProvider):
+
     def __init__(self, env, mod_config):
         self._env = env
         self._mod_config = mod_config
@@ -15,11 +16,13 @@ class McPersistProvider(AbstractPersistProvider):
         if not os.path.exists(self._persist_dir):
             os.makedirs(self._persist_dir)
 
+
     def store(self, key, value):
         path = os.path.join(self._persist_dir, '%s.dat' % key)
         file = open(path, 'wb')
         file.write(value)
         file.close()
+
 
     def load(self, key):
         path = os.path.join(self._persist_dir, '%s.dat' % key)
@@ -31,8 +34,10 @@ class McPersistProvider(AbstractPersistProvider):
         except Exception:
             return None
         
+
     def should_resume(self):
         return self._should_resume
+
 
     def should_run_init(self):
         return self._should_run_init

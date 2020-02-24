@@ -2,17 +2,28 @@ import json
 import time
 from urllib import request
 
-from rqalpha.const import SIDE, ORDER_TYPE
+from rqalpha.const import (
+    SIDE, ORDER_TYPE,
+    DEFAULT_ACCOUNT_TYPE,
+    POSITION_EFFECT,
+)
 from rqalpha.utils.logger import user_system_log
 from rqalpha.events import Event, EVENT
 from rqalpha.model.trade import Trade
+from rqalpha.model.positions import Positions
+from rqalpha.model.portfolio import Portfolio
 from rqalpha.utils import account_type_str2enum
+from rqalpha.mod.rqalpha_mod_sys_simulation.utils import _fake_trade
+
+import pandas as pd
 
 
-def stock_no(book_id):
-    return book_id.split('.')[0]
 
-def order_book_id(stock_no):
+def get_stock_no(order_book_id):
+    return order_book_id.split('.')[0]
+
+
+def get_order_book_id(stock_no):
     if stock_no.startswith('6'):
         return '{}.XSHG'.format(stock_no)
     elif stock_no[0] in ['3', '0']:
@@ -21,14 +32,18 @@ def order_book_id(stock_no):
 
 class ThsautoGatway:
 
-    def __init__(self, env, address):
+
+    def __init__(self, env, mod_config):
         self._env = env
-        self._address = 'http://%s/thsauto' % address
+        self._mod_config = mod_config
+        host = mod_config.broker.split('://')[-1]
+        self._address = 'http://%s/thsauto' % host
         self._open_orders = {}
         self._order_id_map = {}
         self._trade_no = set()
         self._env.event_bus.add_listener(EVENT.POST_BAR, self._on_post_bar)
-        self._env.event_bus.add_listener(EVENT.PRE_AFTER_TRADING, self._on_pre_after_trading)
+        self._env.event_bus.add_listener(EVENT.PRE_BEFORE_TRADING, self._on_pre_before_trading)
+
 
     def submit_order(self, order):
         route = '/sell' if order.side == SIDE.SELL else '/buy'
@@ -39,7 +54,7 @@ class ThsautoGatway:
             else:
                 price = self._env.price_board.get_limit_up(order.order_book_id)
         parmas = 'stock_no=%s&amount=%d&price=%f' % (
-            stock_no(order.order_book_id),
+            get_stock_no(order.order_book_id),
             order.quantity, price,
         )
         url = '%s%s?%s' % (self._address, route, parmas)
@@ -52,8 +67,10 @@ class ThsautoGatway:
                 user_system_log.info('status: %d %s' % (f.status, f.reason))
                 if f.status == 200:
                     data = f.read().decode('utf-8')
+                    user_system_log.info(data)
                     resp = json.loads(data)
-                    if resp.get('success', False):
+                    code = resp.get('code', 1)
+                    if code == 0:
                         order.active()
                         self._env.event_bus.publish_event(Event(EVENT.ORDER_CREATION_PASS, account=account, order=order))
                         str_order_id = str(order.order_id)
@@ -62,12 +79,16 @@ class ThsautoGatway:
                         self._order_id_map[entrust_no] = str_order_id
                         self._order_id_map[str_order_id] = entrust_no
                         return
-                    else:
+                    elif code == 1:
                         reason = resp.get('msg', reason)
+                    else:
+                        user_system_log.info(data)
+                        return
         except Exception as e:
             user_system_log.warn(repr(e))
         order.mark_rejected(reason)
         self._env.event_bus.publish_event(Event(EVENT.ORDER_UNSOLICITED_UPDATE, account=account, order=order))
+
 
     def cancel_order(self, order):
         if self._open_orders.get(order.order_id, None):
@@ -79,7 +100,8 @@ class ThsautoGatway:
                     if f.status == 200:
                         data = f.read().decode('utf-8')
                         resp = json.loads(data)
-                        if resp.get('success', False):
+                        code = resp.get('code', 1)
+                        if code == 0:
                             account = self._env.get_account(order.order_book_id)
                             self._env.event_bus.publish_event(Event(EVENT.ORDER_PENDING_CANCEL, account=account, order=order))
                             order.mark_cancelled("%d order has been cancelled." % order.order_id)
@@ -98,6 +120,7 @@ class ThsautoGatway:
         else:
             user_system_log.info('cancel order not fund: %s' % order.order_id)
 
+
     def _query_filled_orders(self):
         url = '%s%s' % (self._address, '/orders/filled')
         user_system_log.info('loading: %s' % url)
@@ -110,6 +133,7 @@ class ThsautoGatway:
         except Exception as e:
             user_system_log.warn(repr(e))
         return None
+
 
     def _on_post_bar(self, event):
         if self._open_orders:
@@ -124,6 +148,8 @@ class ThsautoGatway:
                     if order_id:
                         order = self._open_orders.get(order_id, None)
                         if order:
+                            account = self._env.get_account(order.order_book_id)
+                            user_system_log.info(repr(item))
                             trade = Trade.__from_create__(
                                 order_id=order.order_id,
                                 price=float(item[u'成交均价']),
@@ -133,9 +159,6 @@ class ThsautoGatway:
                                 order_book_id=order.order_book_id,
                                 frozen_price=order.frozen_price,
                             )
-                            account = self._env.get_account(order.order_book_id)
-                            trade._commission = self._env.get_trade_commission(account_type_str2enum(account.type), trade)
-                            trade._tax = self._env.get_trade_tax(account_type_str2enum(account.type), trade)
                             order.fill(trade)
                             self._env.event_bus.publish_event(Event(EVENT.TRADE, account=account, trade=trade, order=order))
                             self._trade_no.add(trade_no)
@@ -145,10 +168,84 @@ class ThsautoGatway:
                                 del self._order_id_map[entrust_no]
                                 del self._order_id_map[str_order_id]
 
-    def _on_pre_after_trading(self, event):
-        for order in self._open_orders.values():
-            order.mark_cancelled('order {} volume {} is unmatched'.format(order.order_book_id, order.quantity))
-            self._env.event_bus.publish_event(Event(EVENT.ORDER_UNSOLICITED_UPDATE, account=account, order=order))
+
+    def _query_balance(self):
+        url = '%s%s' % (self._address, '/balance')
+        user_system_log.info('loading: %s' % url)
+        try:
+            with request.urlopen(url) as f:
+                user_system_log.info('status: %d %s' % (f.status, f.reason))
+                if f.status == 200:
+                    data = f.read().decode('utf-8')
+                    return json.loads(data)
+        except Exception as e:
+            user_system_log.warn(repr(e))
+        return None
 
 
+    def _query_position(self):
+        url = '%s%s' % (self._address, '/position')
+        user_system_log.info('loading: %s' % url)
+        try:
+            with request.urlopen(url) as f:
+                user_system_log.info('status: %d %s' % (f.status, f.reason))
+                if f.status == 200:
+                    data = f.read().decode('utf-8')
+                    return json.loads(data)
+        except Exception as e:
+            user_system_log.warn(repr(e))
+        return None
 
+    
+    def sync_portfolio(self, portfolio):
+        retry = 0
+        balance_data = self._query_balance()
+        while not balance_data and retry < 5:
+            retry += 1
+            user_system_log.info('retry %d' % retry)
+            balance_data = self._query_balance()
+            
+        retry = 0
+        position_data = self._query_position()
+        while not position_data and retry < 5:
+            retry += 1
+            user_system_log.info('retry %d' % retry)
+            position_data = self._query_position()
+
+        if not balance_data or not position_data:
+            return
+
+        stock = DEFAULT_ACCOUNT_TYPE.STOCK.name
+        account = portfolio.accounts[stock]
+
+        user_system_log.info('sync_positions')
+        position_model = self._env.get_position_model(stock)
+        positions = Positions(position_model)
+        order_book_ids = set()
+        for pos in position_data:
+            order_book_id = get_order_book_id(pos[u'证券代码'])
+            if not self._env.get_instrument(order_book_id):
+                continue
+            quantity = int(pos[u'股票余额'])
+            if quantity > 0:
+                price = float(pos[u'成本价'])
+                trade = _fake_trade(order_book_id, quantity, price)
+                if order_book_id not in positions:
+                    positions[order_book_id] = position_model(order_book_id)
+                positions[order_book_id].apply_trade(trade)
+                positions[order_book_id]._last_price = float(pos[u'市价'])
+                user_system_log.info('%s %d %f %f' % (order_book_id, quantity, price, float(pos[u'市价'])))
+                order_book_ids.add(order_book_id)
+
+        account._positions = positions
+        account._total_cash = float(balance_data[u'资金余额'])
+        account._frozen_cash = float(balance_data[u'冻结资金'])
+
+        self._env.data_source.update_realtime_quotes(
+            set(self._env.get_universe()) | order_book_ids,
+            print_log=True,
+        )
+        
+
+    def _on_pre_before_trading(self, event):
+        self.sync_portfolio(self._env.portfolio)

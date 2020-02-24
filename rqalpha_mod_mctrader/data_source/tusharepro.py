@@ -10,6 +10,8 @@ from rqalpha.utils.logger import user_system_log
 import pandas as pd
 import tushare as ts
 
+
+
 suffix_map = {
     'SZ': 'XSHE',
     'XSHE': 'SZ',
@@ -53,9 +55,11 @@ code_map = {
 def ts_code(rqcode):
     return code_map.get(rqcode, None) or rqcode.split('.')[0]
 
+
 def ts_code_pro(rqcode):
     split = rqcode.split('.')
     return split[0] + '.' + suffix_map[split[1]]
+
 
 def order_book_id(ts_code):
     try:
@@ -68,35 +72,44 @@ def order_book_id(ts_code):
         else:
             raise RuntimeError('Unknown code')
 
+
 def order_book_id_pro(tscode):
     return ts_code_pro(ts_code)
+
 
 def convert_date_str_to_int(datestr):
     return convert_dt_to_int(pd.Timestamp(datestr))
 
+
+
 class TushareProDataSource(BaseDataSource):
+
+
     def __init__(self, env, apis):
         super(TushareProDataSource, self).__init__(
-            env.config.base.data_bundle_path
+            env.config.base.data_bundle_path, {}
         )
         self.apis = apis
         self._env = env
         self.calendar = None
+
 
     def get_api(self):
         api = self.apis.pop(0)
         self.apis.append(api)
         return api
 
-    def update_realtime_quotes(self, order_book_ids):
+
+    def update_realtime_quotes(self, order_book_ids, print_log=False):
         if not order_book_ids:
             return
+
         codes = [ts_code(book_id) for book_id in order_book_ids]
         try:
             df = ts.get_realtime_quotes(codes)
         except Exception as e:
             user_system_log.warn(repr(e))
-            return None
+            return
 
         columns = set(df.columns) - set(['name', 'time', 'date', 'code'])
         for label in columns:
@@ -131,6 +144,10 @@ class TushareProDataSource(BaseDataSource):
 
         self._env.price_board.set_snapshot(df)
 
+        if print_log:
+            user_system_log.info('update_realtime_quotes\n%s\n%s' % (order_book_ids, repr(df)))
+
+
     def get_bar(self, instrument, dt, frequency):
         try:
             quote = self._env.price_board.snapshot.loc[instrument.order_book_id]
@@ -140,6 +157,7 @@ class TushareProDataSource(BaseDataSource):
         except Exception as e:
             user_system_log.warn(repr(e))
         return None
+
 
     def history_bars(self, instrument, bar_count, frequency, fields, dt, skip_suspended=True, include_now=False,
                      adjust_type='pre', adjust_orig=None):
@@ -181,8 +199,10 @@ class TushareProDataSource(BaseDataSource):
             return bar_data[fields].values.flatten()
         return None
 
+
     def available_data_range(self, frequency):
         return date.today(), date.max
+
 
     def get_trading_calendar(self):
         return super(TushareProDataSource, self).get_trading_calendar()
