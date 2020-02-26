@@ -17,17 +17,7 @@ from rqalpha.mod.rqalpha_mod_sys_simulation.utils import _fake_trade
 
 import pandas as pd
 
-
-
-def get_stock_no(order_book_id):
-    return order_book_id.split('.')[0]
-
-
-def get_order_book_id(stock_no):
-    if stock_no.startswith('6'):
-        return '{}.XSHG'.format(stock_no)
-    elif stock_no[0] in ['3', '0']:
-        return '{}.XSHE'.format(stock_no)
+from  rqalpha_mod_mctrader.misc.util import get_order_book_id, get_stock_no
 
 
 class ThsautoGatway:
@@ -129,7 +119,7 @@ class ThsautoGatway:
                 user_system_log.info('status: %d %s' % (f.status, f.reason))
                 if f.status == 200:
                     data = f.read().decode('utf-8')
-                    return json.loads(data)
+                    return json.loads(data).get('data', None)
         except Exception as e:
             user_system_log.warn(repr(e))
         return None
@@ -177,7 +167,7 @@ class ThsautoGatway:
                 user_system_log.info('status: %d %s' % (f.status, f.reason))
                 if f.status == 200:
                     data = f.read().decode('utf-8')
-                    return json.loads(data)
+                    return json.loads(data).get('data', None)
         except Exception as e:
             user_system_log.warn(repr(e))
         return None
@@ -191,55 +181,56 @@ class ThsautoGatway:
                 user_system_log.info('status: %d %s' % (f.status, f.reason))
                 if f.status == 200:
                     data = f.read().decode('utf-8')
-                    return json.loads(data)
+                    return json.loads(data).get('data', None)
         except Exception as e:
             user_system_log.warn(repr(e))
         return None
 
     
-    def sync_portfolio(self, portfolio):
-        retry = 0
+    def sync_portfolio(self, portfolio, retry=10):
         balance_data = self._query_balance()
-        while not balance_data and retry < 5:
-            retry += 1
+        while balance_data is None and retry > 0:
+            time.sleep(5)
+            retry -= 1
             user_system_log.info('retry %d' % retry)
             balance_data = self._query_balance()
-            
-        retry = 0
+
         position_data = self._query_position()
-        while not position_data and retry < 5:
-            retry += 1
+        while position_data is None and retry > 0:
+            time.sleep(5)
+            retry -= 1
             user_system_log.info('retry %d' % retry)
             position_data = self._query_position()
-
-        if not balance_data or not position_data:
-            return
 
         stock = DEFAULT_ACCOUNT_TYPE.STOCK.name
         account = portfolio.accounts[stock]
 
-        user_system_log.info('sync_positions')
-        position_model = self._env.get_position_model(stock)
-        positions = Positions(position_model)
-        order_book_ids = set()
-        for pos in position_data:
-            order_book_id = get_order_book_id(pos[u'证券代码'])
-            if not self._env.get_instrument(order_book_id):
-                continue
-            quantity = int(pos[u'股票余额'])
-            if quantity > 0:
-                price = float(pos[u'成本价'])
-                trade = _fake_trade(order_book_id, quantity, price)
-                if order_book_id not in positions:
-                    positions[order_book_id] = position_model(order_book_id)
-                positions[order_book_id].apply_trade(trade)
-                positions[order_book_id]._last_price = float(pos[u'市价'])
-                user_system_log.info('%s %d %f %f' % (order_book_id, quantity, price, float(pos[u'市价'])))
-                order_book_ids.add(order_book_id)
+        if balance_data:
+            account._frozen_cash = float(balance_data.get(u'冻结金额'))
+            account._total_cash = float(balance_data.get(u'可用金额')) + account._frozen_cash
 
-        account._positions = positions
-        account._total_cash = float(balance_data[u'资金余额'])
-        account._frozen_cash = float(balance_data[u'冻结资金'])
+        order_book_ids = set()
+        if position_data:
+            user_system_log.info('sync_positions')
+            position_model = self._env.get_position_model(stock)
+            positions = Positions(position_model)
+            for pos in position_data:
+                order_book_id = get_order_book_id(pos[u'证券代码'])
+                if not (order_book_id and self._env.get_instrument(order_book_id)):
+                    continue
+                quantity = int(pos.get(u'持股数量') or pos.get(u'股票余额'))
+                if quantity > 0:
+                    price = float(pos.get(u'成本价') or pos.get(u'参考成本'))
+                    trade = _fake_trade(order_book_id, quantity, price)
+                    if order_book_id not in positions:
+                        positions[order_book_id] = position_model(order_book_id)
+                    positions[order_book_id].apply_trade(trade)
+                    last_price = float(pos.get(u'市价'))
+                    positions[order_book_id]._last_price = last_price
+                    user_system_log.info('%s %d %f %f' % (order_book_id, quantity, price, last_price))
+                    order_book_ids.add(order_book_id)
+
+            account._positions = positions
 
         self._env.data_source.update_realtime_quotes(
             set(self._env.get_universe()) | order_book_ids,

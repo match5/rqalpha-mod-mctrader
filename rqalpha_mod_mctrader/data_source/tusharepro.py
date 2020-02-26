@@ -10,6 +10,7 @@ from rqalpha.utils.logger import user_system_log
 import pandas as pd
 import tushare as ts
 
+from rqalpha_mod_mctrader.misc.util import get_order_book_id
 
 
 suffix_map = {
@@ -64,13 +65,11 @@ def ts_code_pro(rqcode):
 def order_book_id(ts_code):
     try:
         return code_map[ts_code]
-    except KeyError:
-        if ts_code.startswith('6'):
-            return '{}.XSHG'.format(ts_code)
-        elif ts_code[0] in ['3', '0']:
-            return '{}.XSHE'.format(ts_code)
-        else:
-            raise RuntimeError('Unknown code')
+    except KeyError as e:
+        code = get_order_book_id(ts_code)
+        if not code:
+            raise e
+        return code
 
 
 def order_book_id_pro(tscode):
