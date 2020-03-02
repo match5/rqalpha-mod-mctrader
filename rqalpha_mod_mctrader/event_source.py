@@ -23,7 +23,7 @@ class McTraderEventSource(AbstractEventSource):
 
 
     def is_trading_time(self, time):
-        if time.hour == 9 and time.minute >= 30:
+        if time.hour == 9 and time.minute > 30:
             return True
         elif time.hour == 10:
             return True
@@ -38,20 +38,21 @@ class McTraderEventSource(AbstractEventSource):
         while True:
             now = datetime.now()
             if self.is_trading_day(now):
+                begin = now
                 if now.date() > self.before_trading_fire_date and 8 <= now.hour < 15:
                     self.before_trading_fire_date = now.date()
                     yield Event(EVENT.BEFORE_TRADING, calendar_dt=now, trading_dt=now)
-                if self.is_trading_time(now):
-                    self._env.data_source.update_realtime_quotes(
-                        set(self._env.get_universe()) | set(self._env.portfolio.positions.keys())
-                    )
                     now = datetime.now()
+                if self.is_trading_time(now):
                     yield Event(EVENT.BAR, calendar_dt=now, trading_dt=now)
+                    now = datetime.now()
                 elif self.after_trading_fire_date < now.date() == self.before_trading_fire_date and now.hour >= 15:
                     self.after_trading_fire_date = now.date()
                     yield Event(EVENT.AFTER_TRADING, calendar_dt=now, trading_dt=now)
                     if now.date() >= end_date:
                         return
-            sec = datetime.now().second
-            time.sleep(60 - sec if 5 < sec else 60)
-            
+                    now = datetime.now()
+                time.sleep(60 - (now - begin).total_seconds())
+            else:
+                time.sleep(1800)
+

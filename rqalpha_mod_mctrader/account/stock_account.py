@@ -39,12 +39,6 @@ class StockAccount(AssetAccount):
             return
         self._apply_trade(event.trade, event.order)
 
-    def _on_before_trading(self, event):
-        pass
-
-    def _on_settlement(self, event):
-        pass
-
     @property
     def type(self):
         return DEFAULT_ACCOUNT_TYPE.STOCK.name
@@ -63,6 +57,8 @@ class StockAccount(AssetAccount):
                 self._frozen_cash -= trade.last_quantity / order.quantity * self._frozen_cash_of_order(order)
             else:
                 self._frozen_cash -= self._frozen_cash_of_order(order)
+        cash = trade.last_price * trade.last_quantity
+        self._total_cash += (cash if trade.side == SIDE.SELL else -cash)
         self._backward_trade_set.add(trade.exec_id)
         
     @staticmethod

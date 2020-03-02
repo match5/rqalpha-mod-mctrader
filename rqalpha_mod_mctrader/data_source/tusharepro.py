@@ -6,6 +6,7 @@ from rqalpha.data.base_data_source import BaseDataSource
 from rqalpha.utils.datetime_func import convert_dt_to_int
 from rqalpha.model.bar import NAMES as bar_fields
 from rqalpha.utils.logger import user_system_log
+from rqalpha.events import EVENT
 
 import pandas as pd
 import tushare as ts
@@ -91,6 +92,8 @@ class TushareProDataSource(BaseDataSource):
         self.apis = apis
         self._env = env
         self.calendar = None
+        self._env.event_bus.add_listener(EVENT.PRE_BEFORE_TRADING, self._on_pre_before_trading)
+        self._env.event_bus.add_listener(EVENT.PRE_BAR, self._on_pre_bar)
 
 
     def get_api(self):
@@ -100,6 +103,10 @@ class TushareProDataSource(BaseDataSource):
 
 
     def update_realtime_quotes(self, order_book_ids, print_log=False):
+
+        if print_log:
+            user_system_log.info('update_realtime_quotes\n%s' % repr(order_book_ids))
+
         if not order_book_ids:
             return
 
@@ -144,7 +151,7 @@ class TushareProDataSource(BaseDataSource):
         self._env.price_board.set_snapshot(df)
 
         if print_log:
-            user_system_log.info('update_realtime_quotes\n%s\n%s' % (order_book_ids, repr(df)))
+            user_system_log.info(repr(df))
 
 
     def get_bar(self, instrument, dt, frequency):
@@ -212,3 +219,15 @@ class TushareProDataSource(BaseDataSource):
         #     df = df[df['is_open'] == 1]
         #     self.calendar = pd.Index(pd.Timestamp(str(d)) for d in df['cal_date'])
         # return self.calendar
+
+
+    def _on_pre_before_trading(self, event):
+        self.update_realtime_quotes(
+            set(self._env.get_universe()) | set(self._env.portfolio.positions.keys())
+        )
+
+
+    def _on_pre_bar(self, event):
+        self.update_realtime_quotes(
+            set(self._env.get_universe()) | set(self._env.portfolio.positions.keys())
+        )

@@ -25,8 +25,6 @@ class AssetAccount(AbstractAccount):
         event_bus.add_listener(EVENT.ORDER_CREATION_REJECT, self._on_order_unsolicited_update)
         event_bus.add_listener(EVENT.ORDER_UNSOLICITED_UPDATE, self._on_order_unsolicited_update)
         event_bus.add_listener(EVENT.ORDER_CANCELLATION_PASS, self._on_order_unsolicited_update)
-        event_bus.add_listener(EVENT.PRE_BEFORE_TRADING, self._on_before_trading)
-        event_bus.add_listener(EVENT.SETTLEMENT, self._on_settlement)
         event_bus.add_listener(EVENT.BAR, self._update_last_price)
         event_bus.add_listener(EVENT.TICK, self._update_last_price)
 
@@ -37,12 +35,6 @@ class AssetAccount(AbstractAccount):
         raise NotImplementedError
 
     def _on_trade(self, event):
-        raise NotImplementedError
-
-    def _on_settlement(self, event):
-        raise NotImplementedError
-
-    def _on_before_trading(self, event):
         raise NotImplementedError
     
     def _update_last_price(self, _):
