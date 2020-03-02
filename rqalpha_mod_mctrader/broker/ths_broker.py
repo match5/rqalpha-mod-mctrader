@@ -23,11 +23,11 @@ class ThsBroker(AbstractBroker):
     def get_open_orders(self, order_book_id=None):
         if order_book_id is not None:
             return [
-                order for order in self._gateway._open_orders.values() if
+                order for order in self._gateway.open_oders if
                 order.order_book_id == order_book_id
             ]
         else:
-            return self._gateway._open_orders.values()
+            return self._gateway.open_oders
 
 
     def submit_order(self, order):
