@@ -1,6 +1,5 @@
 import json
 import time
-import math
 from urllib import request
 
 from rqalpha.const import (
@@ -53,10 +52,10 @@ class ThsautoGatway:
                 price = self._env.price_board.get_bids(order.order_book_id)[-1]
             else:
                 price = self._env.price_board.get_asks(order.order_book_id)[-1]
-        amount = math.floor(order.quantity / 100) * 100
         parmas = 'stock_no=%s&amount=%d&price=%f' % (
             get_stock_no(order.order_book_id),
-            amount, price,
+            order.quantity - order.quantity % 100,
+            price,
         )
         url = '%s%s?%s' % (self._address, route, parmas)
         user_system_log.info('loading: %s' % url)
