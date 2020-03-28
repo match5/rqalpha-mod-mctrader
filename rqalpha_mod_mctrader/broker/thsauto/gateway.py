@@ -1,5 +1,6 @@
 import json
 import time
+import sys
 from urllib import request
 
 from rqalpha.const import (
@@ -188,18 +189,21 @@ class ThsautoGatway:
 
     
     def sync_portfolio(self, portfolio, retry=10):
+        
+        retryed = 0
         balance_data = self._query_balance()
-        while balance_data is None and retry > 0:
-            time.sleep(5)
-            retry -= 1
-            user_system_log.info('retry %d' % retry)
+        while balance_data is None and retryed < retry:
+            time.sleep(min(5 + retryed, 20))
+            retryed += 1
+            user_system_log.info('retry %d' % retryed)
             balance_data = self._query_balance()
 
+        retryed = 0
         position_data = self._query_position()
-        while position_data is None and retry > 0:
-            time.sleep(5)
-            retry -= 1
-            user_system_log.info('retry %d' % retry)
+        while position_data is None and retryed < retry:
+            time.sleep(min(5 + retryed, 20))
+            retryed += 1
+            user_system_log.info('retry %d' % retryed)
             position_data = self._query_position()
 
         stock = DEFAULT_ACCOUNT_TYPE.STOCK.name
@@ -239,4 +243,4 @@ class ThsautoGatway:
 
     def _on_pre_before_trading(self, event):
         self.reset()
-        self.sync_portfolio(self._env.portfolio)
+        self.sync_portfolio(self._env.portfolio, sys.maxsize)
